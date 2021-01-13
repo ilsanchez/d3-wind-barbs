@@ -1,12 +1,169 @@
 // d3-wind-barbs.ts
-import { create, range, select } from 'd3';
-import {
-  Barbs,
-  PrivateWindBarbOptions,
-  PublicWindBarbOptions,
-  SVG,
-  WindBarbDims,
-} from 'd3-wind-barbs';
+import { create, Selection, range, select } from 'd3';
+
+/**
+ * Generic Selection type
+ * @ignore
+ */
+type SVG = Selection<any, any, any, any>;
+
+/**
+ * Make T fully partial
+ * @ignore
+ */
+type DeepPartial<T> = {
+  readonly [P in keyof T]?: DeepPartial<T[P]>;
+};
+
+interface WindBarbSize {
+  /**
+   * Svg dimensions.
+   */
+  readonly size: {
+    /**
+     * Refers to base line where other elements will be appended
+     */
+    readonly width: number;
+    /**
+     * Refers to elements that will be appended to root line as Full lines or triangles
+     */
+    readonly height: number;
+  };
+  /**
+   * SVG root `line` element css class
+   */
+  readonly rootBarClassName: string;
+  /**
+   * SVG element id
+   */
+  readonly svgId: string;
+}
+
+interface WindBarbConversionFactor {
+  /**
+   * @see [[ConversionFactors]]
+   */
+  readonly conversionFactor: number;
+}
+
+interface WindBarbBar {
+  /**
+   * Bars properties, for both, full bars (10 knots) and half bars (5knots)
+   */
+  readonly bar: {
+    /**
+     * Color for barbs, including root line
+     */
+    readonly stroke: string;
+    /**
+     * Width of the line stroke
+     */
+    readonly width: number;
+    /**
+     * Angle used to draw bars and triangles
+     */
+    readonly angle: number;
+    /**
+     * Space between bars and adjacent triangles
+     */
+    readonly padding: number;
+    /**
+     * Css class name for 10 knots bars
+     */
+    readonly fullBarClassName: string;
+    /**
+     * Css class name for 5 knots bars
+     */
+    readonly shortBarClassName: string;
+  };
+}
+interface WindBarbTriangle {
+  /**
+   * Triangles properties
+   */
+  readonly triangle: {
+    /**
+     * Stroke color for the triangles
+     */
+    readonly stroke: string;
+    /**
+     * Fill color for the triangles
+     */
+    readonly fill: string;
+    /**
+     * Space between triangles
+     */
+    readonly padding: number;
+    /**
+     * Css class name for triangles
+     */
+    readonly className: string;
+  };
+}
+
+interface WindBarbCircle {
+  /**
+   * Circle properties when speed < 5 knots
+   */
+  readonly circle: {
+    /**
+     * Stroke color for circle
+     */
+    readonly stroke: string;
+    /**
+     * Fill color for circle
+     */
+    readonly fill: string;
+    /**
+     * Radius of the circle
+     */
+    readonly radius: number;
+    /**
+     * Stroke width of the circle
+     */
+    readonly strokeWidth: number;
+    /**
+     * Css class for the circle
+     */
+    readonly className: string;
+  };
+}
+
+/**
+ * For internal use only
+ * @ignore
+ */
+interface WindBarbDims {
+  readonly dims: {
+    readonly barHeight: number;
+    readonly triangleHeight: number;
+    readonly triangleWidth: number;
+  };
+}
+
+export type PublicWindBarbOptions = DeepPartial<WindBarbSize> &
+  DeepPartial<WindBarbConversionFactor> &
+  DeepPartial<WindBarbBar> &
+  DeepPartial<WindBarbTriangle> &
+  DeepPartial<WindBarbCircle>;
+
+/**
+ * For internal use only. Makes @see [[PublicWindBarbOptions]] fully required and
+ * add @see [[WindBarbDims]]
+ * @ignore
+ */
+export type PrivateWindBarbOptions = WindBarbBar &
+  WindBarbSize &
+  WindBarbConversionFactor &
+  WindBarbTriangle &
+  WindBarbDims &
+  WindBarbCircle;
+
+/**
+ * For internal use only
+ * @ignore
+ */
+type Barbs = { 50: number; 10: number; 5: number };
 
 /**
  * This library works internally with nautical Knots. So, if your data is in other
@@ -32,56 +189,34 @@ export const ConversionFactors = {
  * Default configuration.
  * All that properties that you don't provide will be overwritten by
  * the corresponding option of this configuration
+ *
+ * @see [[PublicWindBarbOptions]]
  */
 const DEFAULT_CONFIG: Omit<PrivateWindBarbOptions, 'dims'> = {
   /**
-   * Svg dimensions.
+   * @see [[WindBarbSize]]
    */
   size: {
-    /**
-     * Refers to elements that will be appended to root line as Full lines or triangles
-     */
     height: 33,
-    /**
-     * Refers to base line where other elements will be appended
-     */
     width: 80,
   },
   /**
-   * SVG root `line` element css class
+   * @see [[WindBarbSize]]
    */
   rootBarClassName: 'wind-barb-root',
   /**
-   * SVG element id
+   * @see [[WindBarbSize]]
    */
   svgId: '',
   /**
-   * Bars properties, for both, full bars (10 knots) and half bars (5knots)
+   * @see [[WindBarbBar]]
    */
   bar: {
-    /**
-     * Angle used to draw bars and triangles
-     */
     angle: 30,
-    /**
-     * Space between bars and adjacent triangles
-     */
     padding: 6,
-    /**
-     * Color for barbs, including root line
-     */
     stroke: '#000',
-    /**
-     * Width of the line stroke
-     */
     width: 2,
-    /**
-     * Css class name for 10 knots bars
-     */
     fullBarClassName: 'wind-barb-bar-full',
-    /**
-     * Css class name for 5 knots bars
-     */
     shortBarClassName: 'wind-barb-bar-half',
   },
   /**
@@ -89,49 +224,22 @@ const DEFAULT_CONFIG: Omit<PrivateWindBarbOptions, 'dims'> = {
    */
   conversionFactor: ConversionFactors.None,
   /**
-   * Triangles properties
+   * @see [[WindBarbTriangle]]
    */
   triangle: {
-    /**
-     * Fill color for the triangles
-     */
     fill: '#000',
-    /**
-     * Stroke color for the triangles
-     */
     stroke: '#000',
-    /**
-     * Space between triangles
-     */
     padding: 6,
-    /**
-     * Css class name for triangles
-     */
     className: 'wind-barb-triangle',
   },
   /**
-   * Circle properties when speed < 5 knots
+   * @see [[WindBarbCircle]]
    */
   circle: {
-    /**
-     * Fill color for circle
-     */
     fill: '#FFFFFF00',
-    /**
-     * Stroke color for circle
-     */
     stroke: '#000',
-    /**
-     * Radius of the circle
-     */
     radius: 10,
-    /**
-     * Stroke width of the circle
-     */
     strokeWidth: 2,
-    /**
-     * Css class for the circle
-     */
     className: 'wind-barb-circle',
   },
 };
