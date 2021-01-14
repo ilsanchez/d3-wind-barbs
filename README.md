@@ -6,6 +6,7 @@
 [![GitHub license](https://img.shields.io/github/license/ilsanchez/d3-wind-barbs.svg)](https://github.com/ilsanchez/d3-wind-barbs/blob/master/LICENSE)
 [![GitHub version](https://badge.fury.io/gh/ilsanchez%2Fd3-wind-barbs.js.svg)](https://github.com/ilsanchez/d3-wind-barbs)
 [![Open Source Love svg1](https://badges.frapsoft.com/os/v1/open-source.svg?v=103)](https://github.com/ellerbrock/open-source-badges/)
+[![Minizipped Size](https://badgen.net/bundlephobia/minzip/d3-wind-barbs)](https://bundlephobia.com/result?p=d3-wind-barbs@1.0.3)
 
 # d3-wind-barbs
 
@@ -28,4 +29,6 @@ const windBarb = new D3WindBarb(
 ).draw();
 ```
 
-Click [here](https://ilsanchez.github.io/d3-wind-barbs/) to see the full documentation
+Click [here](https://ilsanchez.github.io/d3-wind-barbs/) to see the full documentation.
+
+Or [here](https://stackblitz.com/edit/d3-wind-barbs-playground?file=index.tsx) to play with it in Stackblitz

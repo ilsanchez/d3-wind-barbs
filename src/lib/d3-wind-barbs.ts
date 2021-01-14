@@ -1,163 +1,17 @@
 // d3-wind-barbs.ts
 import { create, select, Selection } from 'd3-selection';
 
+import {
+  PrivateWindBarbOptions,
+  PublicWindBarbOptions,
+  WindBarbDims,
+} from './models';
+
 /**
  * Generic Selection type
  * @ignore
  */
 type SVG = Selection<any, any, any, any>;
-
-/**
- * Make T fully partial
- * @ignore
- */
-type DeepPartial<T> = {
-  readonly [P in keyof T]?: DeepPartial<T[P]>;
-};
-
-interface WindBarbSize {
-  /**
-   * Svg dimensions.
-   */
-  readonly size: {
-    /**
-     * Refers to base line where other elements will be appended
-     */
-    readonly width: number;
-    /**
-     * Refers to elements that will be appended to root line as Full lines or triangles
-     */
-    readonly height: number;
-  };
-  /**
-   * SVG root `line` element css class
-   */
-  readonly rootBarClassName: string;
-  /**
-   * SVG element id
-   */
-  readonly svgId: string;
-}
-
-interface WindBarbConversionFactor {
-  /**
-   * @see [[ConversionFactors]]
-   */
-  readonly conversionFactor: number;
-}
-
-interface WindBarbBar {
-  /**
-   * Bars properties, for both, full bars (10 knots) and half bars (5knots)
-   */
-  readonly bar: {
-    /**
-     * Color for barbs, including root line
-     */
-    readonly stroke: string;
-    /**
-     * Width of the line stroke
-     */
-    readonly width: number;
-    /**
-     * Angle used to draw bars and triangles
-     */
-    readonly angle: number;
-    /**
-     * Space between bars and adjacent triangles
-     */
-    readonly padding: number;
-    /**
-     * Css class name for 10 knots bars
-     */
-    readonly fullBarClassName: string;
-    /**
-     * Css class name for 5 knots bars
-     */
-    readonly shortBarClassName: string;
-  };
-}
-interface WindBarbTriangle {
-  /**
-   * Triangles properties
-   */
-  readonly triangle: {
-    /**
-     * Stroke color for the triangles
-     */
-    readonly stroke: string;
-    /**
-     * Fill color for the triangles
-     */
-    readonly fill: string;
-    /**
-     * Space between triangles
-     */
-    readonly padding: number;
-    /**
-     * Css class name for triangles
-     */
-    readonly className: string;
-  };
-}
-
-interface WindBarbCircle {
-  /**
-   * Circle properties when speed < 5 knots
-   */
-  readonly circle: {
-    /**
-     * Stroke color for circle
-     */
-    readonly stroke: string;
-    /**
-     * Fill color for circle
-     */
-    readonly fill: string;
-    /**
-     * Radius of the circle
-     */
-    readonly radius: number;
-    /**
-     * Stroke width of the circle
-     */
-    readonly strokeWidth: number;
-    /**
-     * Css class for the circle
-     */
-    readonly className: string;
-  };
-}
-
-/**
- * For internal use only
- * @ignore
- */
-interface WindBarbDims {
-  readonly dims: {
-    readonly barHeight: number;
-    readonly triangleHeight: number;
-    readonly triangleWidth: number;
-  };
-}
-
-export type PublicWindBarbOptions = DeepPartial<WindBarbSize> &
-  DeepPartial<WindBarbConversionFactor> &
-  DeepPartial<WindBarbBar> &
-  DeepPartial<WindBarbTriangle> &
-  DeepPartial<WindBarbCircle>;
-
-/**
- * For internal use only. Makes @see [[PublicWindBarbOptions]] fully required and
- * add @see [[WindBarbDims]]
- * @ignore
- */
-export type PrivateWindBarbOptions = WindBarbBar &
-  WindBarbSize &
-  WindBarbConversionFactor &
-  WindBarbTriangle &
-  WindBarbDims &
-  WindBarbCircle;
 
 /**
  * For internal use only
@@ -246,7 +100,25 @@ const DEFAULT_CONFIG: Omit<PrivateWindBarbOptions, 'dims'> = {
     stroke: '#000',
     radius: 10,
     strokeWidth: 2,
-    className: 'wind-barb-circle',
+    className: 'wind-barb-zero-knots-circle',
+  },
+  baseCircle: undefined,
+};
+
+/**
+ * Default configuration for base circle. If you provide some options for `baseCircle`
+ * the rest of options will be filled with this options.
+ *
+ * If you provide an empty object as `baseCircle` this will be the used properties.
+ * If you provide `undefinded` then, no circle will be drawn
+ */
+const DEFAULT_CIRCLE_CONFIG: Pick<PrivateWindBarbOptions, 'baseCircle'> = {
+  baseCircle: {
+    className: 'wind-barb-base-circle',
+    fill: '#000',
+    radius: 5,
+    stroke: '#000',
+    strokeWidth: 1,
   },
 };
 
@@ -300,6 +172,8 @@ export class D3WindBarb {
       triangle: pTriangle,
       circle: pCircle,
       svgId: pSvgId,
+      baseCircle: pBaseCircle,
+      rootBarClassName: pRootBarClassName,
     } = this.options || {};
     const {
       bar,
@@ -308,14 +182,21 @@ export class D3WindBarb {
       triangle,
       circle,
       svgId,
+      rootBarClassName,
     } = DEFAULT_CONFIG;
     const privateOptions: any = {
       bar: { ...bar, ...pBar },
       conversionFactor: pConversionFactor ?? conversionFactor,
+      rootBarClassName: pRootBarClassName ?? rootBarClassName,
       svgId: pSvgId ?? svgId,
       size: { ...size, ...pSize },
       triangle: { ...triangle, ...pTriangle },
       circle: { ...circle, ...pCircle },
+      baseCircle: !pBaseCircle
+        ? undefined
+        : 'object' === typeof pBaseCircle
+        ? { ...DEFAULT_CIRCLE_CONFIG.baseCircle, ...pBaseCircle }
+        : DEFAULT_CIRCLE_CONFIG.baseCircle,
     };
     const dims = this.getSizes(privateOptions);
 
@@ -414,20 +295,27 @@ export class D3WindBarb {
       .attr('stroke', stroke)
       .attr('class', rootBarClassName);
 
+    this.drawBaseCircle(container);
+
     if (barbs[50] !== 0) {
       this.drawTriangles(barbs[50], container);
     }
 
     if (barbs[10] !== 0) {
       const paddingR = barbs[50] * (triangleWidth + trianglePadding);
-      this.drawFullBars(barbs[10], container, paddingR);
+      this.drawBars(barbs[10], container, paddingR, 'full');
     }
 
     if (barbs[5] !== 0) {
       const paddingR =
         barbs[50] * (triangleWidth + trianglePadding) +
         barbs[10] * (barPadding + barWidth);
-      this.drawHalfBars(barbs[5], container, paddingR);
+      this.drawBars(
+        barbs[5],
+        container,
+        paddingR === 0 ? barPadding * 2 : paddingR,
+        'half'
+      );
     }
 
     container
@@ -439,6 +327,28 @@ export class D3WindBarb {
       );
 
     return container;
+  }
+
+  private drawBaseCircle(container: SVG) {
+    if (!this.fullOptions.baseCircle) {
+      return;
+    }
+    const {
+      baseCircle,
+      size: { height },
+    } = this.fullOptions;
+
+    container
+      .append('g')
+      .append('circle')
+      .attr('class', baseCircle.className)
+      .attr('radius', baseCircle.radius)
+      .attr('stroke', baseCircle.stroke)
+      .attr('fill', baseCircle.fill)
+      .attr('stroke-width', baseCircle.strokeWidth)
+      .attr('cx', 0)
+      .attr('cy', height)
+      .attr('r', baseCircle.radius);
   }
 
   private drawTriangles(q: number, container: SVG) {
@@ -468,10 +378,22 @@ export class D3WindBarb {
       .attr('class', className);
   }
 
-  private drawFullBars(q: number, container: SVG, right: number) {
+  private drawBars(
+    q: number,
+    container: SVG,
+    right: number,
+    type: 'full' | 'half'
+  ) {
     const {
       size: { width, height },
-      bar: { width: barWidth, padding, angle, stroke, fullBarClassName },
+      bar: {
+        width: barWidth,
+        padding,
+        angle,
+        stroke,
+        fullBarClassName,
+        shortBarClassName,
+      },
       dims: { barHeight },
     } = this.fullOptions;
 
@@ -491,44 +413,10 @@ export class D3WindBarb {
         'x2',
         (_: any, i: number) => width - (right + i * (barWidth + padding))
       )
-      .attr('y2', height - barHeight)
+      .attr('y2', height - (type === 'full' ? barHeight : barHeight / 2))
       .attr('stroke', stroke)
       .attr('stroke-width', barWidth)
-      .attr('class', fullBarClassName)
-      .attr(
-        'transform-origin',
-        (_: any, i: number) =>
-          `${width - (right + i * (barWidth + padding))} ${height}`
-      )
-      .attr('transform', `rotate(${angle})`);
-  }
-
-  private drawHalfBars(q: number, container: SVG, right: number) {
-    const {
-      size: { height, width },
-      bar: { width: barWidth, padding, angle, stroke, shortBarClassName },
-      dims: { barHeight },
-    } = this.fullOptions;
-
-    const data = range(q);
-    container
-      .append('g')
-      .selectAll('line')
-      .data(data)
-      .enter()
-      .append('line')
-      .attr('x1', (_: any, i: number) => {
-        return width - (right + i * (barWidth + padding));
-      })
-      .attr('y1', height)
-      .attr(
-        'x2',
-        (_: any, i: number) => width - (right + i * (barWidth + padding))
-      )
-      .attr('y2', height - barHeight / 2)
-      .attr('stroke', stroke)
-      .attr('stroke-width', barWidth)
-      .attr('class', shortBarClassName)
+      .attr('class', type === 'full' ? fullBarClassName : shortBarClassName)
       .attr(
         'transform-origin',
         (_: any, i: number) =>
@@ -592,3 +480,4 @@ export class D3WindBarb {
     return this.svg.node();
   }
 }
+45;
