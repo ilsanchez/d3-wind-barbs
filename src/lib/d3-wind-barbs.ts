@@ -1,5 +1,5 @@
 // d3-wind-barbs.ts
-import { create, Selection, range, select } from 'd3';
+import { create, select, Selection } from 'd3-selection';
 
 /**
  * Generic Selection type
@@ -184,6 +184,12 @@ export const ConversionFactors = {
   MpsToKnot: 1.944,
   None: 1,
 } as const;
+
+/**
+ * @ignore
+ */
+const range = (length: number, from = 0): number[] =>
+  Array.from(new Array(length), (_, i) => from + i);
 
 /**
  * Default configuration.
