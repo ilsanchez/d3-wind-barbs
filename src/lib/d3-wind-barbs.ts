@@ -425,7 +425,7 @@ export class D3WindBarb {
     }
 
     container
-      .attr('transform-origin', `${width / 2}% ${height}%`)
+      .attr('transform-origin', `${width / 2}px ${height}px`)
       .attr('transform', `translate(0, ${-height / 2})`)
       .attr(
         'transform',
